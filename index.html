@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e6b66">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>دفتر صيانة العربية</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@500;700&display=swap">
+<style>
+html{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+/* Layout: one-column phone app. Instrument-cluster home (odometer + fuel range), maintenance list ranked by closeness, bottom tab bar. */
+:root{
+  --bg:#eef1f0; --surface:#ffffff; --surface2:#e5ebea; --fg:#14201f; --muted:#576866; --line:#d2dad8;
+  --accent:#0e6b66; --accent-fg:#ffffff; --accent-soft:#d3ebe8;
+  --ok:#1b7f45; --ok-soft:#dbf0e3; --warn:#9c5d00; --warn-soft:#fae8c4; --bad:#b8341f; --bad-soft:#f8d9d4;
+  --odo-bg:#14201f; --odo-fg:#f2f6f5; --shadow:rgba(20,32,31,.18);
+  --f-display:'Reem Kufi','IBM Plex Sans Arabic',system-ui,sans-serif;
+  --f-body:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1413; --surface:#162120; --surface2:#1f2e2c; --fg:#e8f0ee; --muted:#93a6a3; --line:#2a3b39;
+  --accent:#4cc3b8; --accent-fg:#06211f; --accent-soft:#193936;
+  --ok:#5fd08a; --ok-soft:#173326; --warn:#f0b34a; --warn-soft:#3a2c10; --bad:#ff8272; --bad-soft:#3d1c18;
+  --odo-bg:#050a0a; --odo-fg:#e8f0ee; --shadow:rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1413; --surface:#162120; --surface2:#1f2e2c; --fg:#e8f0ee; --muted:#93a6a3; --line:#2a3b39;
+  --accent:#4cc3b8; --accent-fg:#06211f; --accent-soft:#193936;
+  --ok:#5fd08a; --ok-soft:#173326; --warn:#f0b34a; --warn-soft:#3a2c10; --bad:#ff8272; --bad-soft:#3d1c18;
+  --odo-bg:#050a0a; --odo-fg:#e8f0ee; --shadow:rgba(0,0,0,.6); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-block:14px 96px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#app{max-width:560px;margin-inline:auto;display:flex;flex-direction:column;gap:14px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;font-family:var(--f-display);font-weight:700;text-wrap:balance}
+.num{font-variant-numeric:tabular-nums}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.top h1{font-size:22px}
+.top small{color:var(--muted);display:block;font-family:var(--f-body);font-weight:400;font-size:13px}
+.demo{background:var(--warn-soft);color:var(--warn);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card h2{font-size:17px}
+.sub{color:var(--muted);font-size:13px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.wrap{flex-wrap:wrap}
+
+/* odometer */
+.odo{direction:ltr;display:flex;gap:4px;align-items:stretch;justify-content:flex-start}
+.odo b{background:var(--odo-bg);color:var(--odo-fg);font-family:var(--f-body);font-weight:600;font-size:30px;line-height:1;
+  min-width:32px;padding:10px 0;text-align:center;border-radius:6px;font-variant-numeric:tabular-nums;
+  box-shadow:inset 0 -10px 12px -10px rgba(255,255,255,.18),inset 0 8px 10px -8px rgba(0,0,0,.6)}
+.odo i{width:6px}
+.odo span{align-self:flex-end;color:var(--muted);font-size:13px;padding-inline-start:6px;padding-bottom:4px}
+.conf{display:flex;flex-direction:column;gap:2px}
+.conf .lbl{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.est{color:var(--accent);font-size:15px;font-weight:600;border-top:1px dashed var(--line);padding-top:8px;display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline}
+.est small{color:var(--muted);font-weight:400;font-size:12px}
+
+/* fuel */
+.fuelgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--surface2);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:12px;font-weight:500;color:var(--muted)}
+.range{direction:ltr;position:relative;height:10px;background:var(--surface2);border-radius:999px;margin-block:6px 22px}
+.range .fillbar{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:999px;opacity:.9}
+.range .mk{position:absolute;top:-4px;width:2px;height:18px;background:var(--fg)}
+.range .mk em{position:absolute;top:20px;transform:translateX(-50%);font-style:normal;font-size:11px;color:var(--muted);white-space:nowrap}
+.range .now{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);transform:translate(-50%,-50%)}
+
+/* chips */
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 13px;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+
+/* item rows */
+.list{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;text-align:start;width:100%;min-width:0}
+.item .name{font-weight:600;font-size:16px}
+.item .cat{font-size:12px;color:var(--muted)}
+.item .big{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.item .meta{font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 12px}
+.bar{height:6px;background:var(--surface2);border-radius:999px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:999px}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.st-ok .pill{background:var(--ok-soft);color:var(--ok)} .st-ok .bar i{background:var(--ok)}
+.st-warn .pill{background:var(--warn-soft);color:var(--warn)} .st-warn .bar i{background:var(--warn)}
+.st-bad .pill{background:var(--bad-soft);color:var(--bad)} .st-bad .bar i{background:var(--bad)}
+.st-none .pill{background:var(--surface2);color:var(--muted)}
+.st-bad .big{color:var(--bad)} .st-warn .big{color:var(--warn)}
+
+/* buttons + forms */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;font-weight:600;font-size:14px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btns .btn{flex:1 1 auto}
+.form{display:flex;flex-direction:column;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:13px;color:var(--muted);font-weight:600}
+.field input,.field select,.field textarea{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.err{color:var(--bad);font-size:13px;font-weight:600;min-height:0}
+.ok-msg{background:var(--ok-soft);color:var(--ok);border-radius:10px;padding:10px 12px;font-size:14px}
+.hint{font-size:12.5px;color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:18px 8px;font-size:14px}
+
+.table{display:flex;flex-direction:column}
+.tr{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);align-items:center;min-width:0}
+.tr:last-child{border-bottom:0}
+.tr .l{min-width:0}
+.tr .t{font-weight:600}
+.tr .d{font-size:12.5px;color:var(--muted)}
+.x{border:0;background:transparent;color:var(--muted);font-size:20px;line-height:1;padding:4px 8px}
+
+/* nav */
+nav{position:fixed;inset:auto 0 0 0;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);
+  padding-top:6px;padding-bottom:calc(6px + env(safe-area-inset-bottom,0px));padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));z-index:5}
+nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--muted);padding:4px 0;font-weight:500}
+nav button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button[aria-current="page"]{color:var(--accent);font-weight:700}
+
+/* sheet */
+.shade{position:fixed;inset:0;background:var(--shadow);z-index:20;display:flex;align-items:flex-end;justify-content:center;
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+.sheet{background:var(--surface);width:100%;max-width:560px;max-height:90%;overflow-y:auto;border-radius:18px 18px 0 0;
+  padding:16px max(16px,env(safe-area-inset-left,0px)) calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.shade[hidden],.toast[hidden]{display:none!important}
+.alerts{display:flex;flex-direction:column;gap:8px}
+.alert{border-radius:12px;padding:10px 12px;font-size:14px;font-weight:600}
+.alert.bad{background:var(--bad-soft);color:var(--bad)}
+.alert.warn{background:var(--warn-soft);color:var(--warn)}
+.alert.info{background:var(--accent-soft);color:var(--accent)}
+.sync{font-size:12px;color:var(--muted)}
+.sheet h2{font-size:19px}
+.sheet .grab{width:42px;height:4px;border-radius:4px;background:var(--line);align-self:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;z-index:30;max-width:90%}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}}
+</style>
+</head>
+<body>
+<div id="app" dir="rtl" lang="ar"></div>
+<nav dir="rtl" aria-label="التنقل" id="nav"></nav>
+<div id="shade" class="shade" dir="rtl" lang="ar" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(function(){
+document.documentElement.lang='ar';document.documentElement.dir='rtl';
+var DAY=864e5, KEY='verna-maint-v2';
+var $=function(s){return document.querySelector(s)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var fmt=function(n){return Math.round(n).toLocaleString('en-US')};
+var fmt1=function(n){return (Math.round(n*10)/10).toLocaleString('en-US')};
+var pd=function(s){var a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2])};
+var ds=function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+var T0=function(){var d=new Date();d.setHours(0,0,0,0);return d};
+var dd=function(a,b){return Math.round((b-a)/DAY)};
+var addM=function(d,n){return new Date(d.getFullYear(),d.getMonth()+n,d.getDate())};
+var addD=function(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n)};
+var uid=function(){return Math.random().toString(36).slice(2,9)};
+function fd(d,withYear){
+  try{var o={day:'numeric',month:'long'};if(withYear||d.getFullYear()!==T0().getFullYear())o.year='numeric';return d.toLocaleDateString('ar-EG-u-nu-latn',o)}catch(e){return ds(d)}
+}
+function fdays(n){if(n<45)return n+' يوم';var m=Math.round(n/30.4);if(m<24)return m+' شهر';return fmt1(n/365)+' سنة'}
+function num(v){
+  v=String(v==null?'':v).replace(/[٠-٩]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[۰-۹]/g,function(c){return c.charCodeAt(0)-1776})
+    .replace(/[٫]/g,'.').replace(/[٬,\s]/g,'');
+  if(v==='')return null;var x=parseFloat(v);return isFinite(x)?x:NaN;
+}
+
+/* ---------- data ---------- */
+var CATS=['عفشة','مكنة','سوائل','كاوتش','كهربا وبطارية','تراخيص','فلاتر وسيور'];
+function demo(){
+  var T=T0(), ago=function(n){return ds(addD(T,-n))};
+  var jit=[10.4,11.1,10.8,11.3,10.6,10.9,11.2,10.5,10.8,11.0,10.7,11.1], gaps=[10,9,11,10,9,10,11,9,10,10,9,10];
+  var odo=141200, day=124, fills=[{id:uid(),date:ago(day),liters:38,odo:odo}];
+  gaps.forEach(function(g,i){day-=g;var km=g*37;odo+=km;fills.push({id:uid(),date:ago(day),liters:Math.round(km/jit[i]*2)/2,odo:odo})});
+  var L=odo+80;
+  var H=function(d,o,c,n){return {id:uid(),date:ago(d),odo:o,cost:c,note:n||''}};
+  return {demo:true,
+    settings:{reserve:10,initialRate:11,yellowPct:10,dailyGuess:35,cats:CATS.slice(),prices:[{date:ago(400),price:19.25},{date:ago(100),price:20.75}]},
+    fills:fills, readings:[{id:uid(),date:ago(2),odo:L}],
+    items:[
+      {id:uid(),name:'زيت المحرك',cat:'سوائل',kmInt:5000,months:6,alertPct:null,history:[H(190,L-8600,650),H(100,L-3600,700,'زيت 5W-30')]},
+      {id:uid(),name:'فلتر الزيت',cat:'فلاتر وسيور',kmInt:5000,months:6,alertPct:null,history:[H(100,L-3600,120)]},
+      {id:uid(),name:'فلتر الهواء',cat:'فلاتر وسيور',kmInt:15000,months:12,alertPct:null,history:[H(200,L-7400,180)]},
+      {id:uid(),name:'تيل الفرامل الأمامي',cat:'عفشة',kmInt:30000,months:null,alertPct:null,history:[H(330,L-28000,900)]},
+      {id:uid(),name:'ترصيص وميزان',cat:'كاوتش',kmInt:10000,months:6,alertPct:null,history:[H(250,L-10400,200)]},
+      {id:uid(),name:'زيت ناقل الحركة',cat:'سوائل',kmInt:60000,months:36,alertPct:null,history:[H(500,L-18000,1800)]},
+      {id:uid(),name:'سير الكاميرا',cat:'فلاتر وسيور',kmInt:90000,months:60,alertPct:null,history:[H(700,L-26000,3200)]},
+      {id:uid(),name:'البطارية',cat:'كهربا وبطارية',kmInt:null,months:30,alertPct:null,history:[H(830,L-30000,2600)]},
+      {id:uid(),name:'تأمين العربية',cat:'تراخيص',kmInt:null,months:12,alertPct:null,history:[H(335,L-12000,4300)]},
+      {id:uid(),name:'رخصة العربية',cat:'تراخيص',kmInt:null,months:12,alertPct:null,history:[H(120,L-4400,1100)]}
+    ]};
+}
+function blank(){return {demo:false,settings:{reserve:10,initialRate:11,yellowPct:10,dailyGuess:35,cats:CATS.slice(),prices:[{date:ds(T0()),price:20}]},fills:[],readings:[],items:[]}}
+function load(){try{var r=localStorage.getItem(KEY);if(r)return JSON.parse(r)}catch(e){}return null}
+var S=load()||blank();
+function localSave(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){S.updatedAt=Date.now();localSave();cloudPush()}
+var ui={tab:'home',cat:'',showAll:false,flash:null,itemCat:''};
+
+/* ---------- cloud sync: Firebase Auth (Google) + one Firestore doc per user, last write wins ---------- */
+var FB_CFG={apiKey:"AIzaSyBQc-mpfMRw-Un6A9vuClZZslRLZSth3wk",authDomain:"car-book-dewann.firebaseapp.com",projectId:"car-book-dewann",storageBucket:"car-book-dewann.firebasestorage.app",messagingSenderId:"307059949952",appId:"1:307059949952:web:dfdd01ca35e62d12ff0165"};
+var FB_BASE='https://www.gstatic.com/firebasejs/10.14.1/';
+var cloud={st:'local',ref:null,t:null,user:null,api:null,auth:null,db:null};
+function cloudText(){return {ok:'محفوظ على السحابة',sync:'جاري الحفظ…',err:'غير متزامن، محفوظ على الموبايل',local:'محفوظ على الموبايل فقط',out:'سجّل دخول جوجل لتفعيل السحابة'}[cloud.st]||''}
+function setCloud(s){cloud.st=s;['cloud','cloud2'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=cloudText()})}
+function uiAuth(){var sh=document.getElementById('shade');if(sh&&!sh.hidden)return;if(ui.tab==='home'||ui.tab==='set')render()}
+function cloudPush(){
+  if(!cloud.ref||!cloud.api)return;setCloud('sync');clearTimeout(cloud.t);
+  cloud.t=setTimeout(function(){
+    cloud.api.fs.setDoc(cloud.ref,{json:JSON.stringify(S),updatedAt:S.updatedAt||0}).then(function(){setCloud('ok')},function(){setCloud('err')});
+  },700);
+}
+function cloudPull(){
+  if(!cloud.ref||!cloud.api)return;setCloud('sync');
+  cloud.api.fs.getDoc(cloud.ref).then(function(snap){
+    var rd=snap.exists()?snap.data():null,R=null;try{R=rd&&rd.json?JSON.parse(rd.json):null}catch(e){}
+    if(R&&Array.isArray(R.items)&&(R.updatedAt||0)>(S.updatedAt||0)){S=R;S.readings=S.readings||[];localSave();render();setCloud('ok')}
+    else if(!R||(S.updatedAt||0)>(R.updatedAt||0)){if(!S.updatedAt)S.updatedAt=Date.now();cloudPush()}
+    else setCloud('ok');
+  }).catch(function(){setCloud('err')});
+}
+function cloudInit(){
+  Promise.all([import(FB_BASE+'firebase-app.js'),import(FB_BASE+'firebase-auth.js'),import(FB_BASE+'firebase-firestore.js')]).then(function(m){
+    var app=m[0].initializeApp(FB_CFG);
+    cloud.api={au:m[1],fs:m[2]};cloud.auth=m[1].getAuth(app);cloud.db=m[2].getFirestore(app);
+    m[1].onAuthStateChanged(cloud.auth,function(u){
+      cloud.user=u;
+      if(u){cloud.ref=m[2].doc(cloud.db,'users/'+u.uid+'/app/state');cloudPull()}
+      else{cloud.ref=null;setCloud('out')}
+      uiAuth();
+    });
+  }).catch(function(){setCloud('local')});
+}
+window.addEventListener('online',function(){if(cloud.st==='err'&&cloud.ref)cloudPull();else if(cloud.st==='local')cloudInit()});
+
+/* ---------- calculations ---------- */
+function priceAt(date){
+  var p=S.settings.prices.slice().sort(function(a,b){return a.date<b.date?-1:1}),v=p.length?p[0].price:0;
+  p.forEach(function(x){if(x.date<=date)v=x.price});return v;
+}
+function derive(){
+  var today=T0(),st=S.settings;
+  var rd=S.fills.map(function(f){return {date:f.date,odo:f.odo}}).concat(S.readings).sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:a.odo-b.odo});
+  var last=rd.length?rd[rd.length-1]:null;
+  var daily=st.dailyGuess,dailySrc='guess';
+  if(last){var ld=pd(last.date);var from=null;
+    for(var i=0;i<rd.length;i++){if(dd(pd(rd[i].date),ld)<=60){from=rd[i];break}}
+    if(from){var days=dd(pd(from.date),ld);if(days>=7&&last.odo>from.odo){daily=(last.odo-from.odo)/days;dailySrc='avg'}}}
+  var est=last?last.odo+daily*Math.max(0,dd(pd(last.date),today)):0;
+  if(!last){S.items.forEach(function(it){it.history.forEach(function(x){if(x.odo>est)est=x.odo})})}
+  var fs=S.fills.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:a.odo-b.odo});
+  var pairs=fs.slice(1).map(function(f,i){return {km:f.odo-fs[i].odo,l:f.liters}}).filter(function(p){return p.km>0&&p.l>0}).slice(-10);
+  var rate=st.initialRate,rateSrc='initial';
+  if(pairs.length){var k=0,l=0;pairs.forEach(function(p){k+=p.km;l+=p.l});rate=k/l;rateSrc=pairs.length}
+  var fill=fs.length?fs[fs.length-1]:null,fuel=null;
+  var tank=st.tank||40;
+  if(fill){fuel={fill:fill,tank:tank,runsOut:fill.odo+tank*rate,refuel:fill.odo+Math.max(0,tank-st.reserve)*rate}}
+  var cs=S.items.map(function(it){return calc(it,est,daily,today)});
+  return {rd:rd,last:last,daily:daily,dailySrc:dailySrc,est:est,rate:rate,rateSrc:rateSrc,fuel:fuel,cs:cs,today:today};
+}
+function calc(it,est,daily,today){
+  var h=it.history.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:a.odo-b.odo});
+  var c={it:it,last:h.length?h[h.length-1]:null,st:'none',used:-1};
+  if(!c.last)return c;
+  var ld=pd(c.last.date),uk=-1,ut=-1,predDays=null;
+  if(it.kmInt){c.kmDue=c.last.odo+it.kmInt;c.remKm=c.kmDue-est;uk=(est-c.last.odo)/it.kmInt;
+    predDays=daily>0?c.remKm/daily:null}
+  if(it.months){c.dateDue=addM(ld,it.months);c.remDays=dd(today,c.dateDue);ut=(today-ld)/(c.dateDue-ld);
+    predDays=predDays==null?c.remDays:Math.min(predDays,c.remDays)}
+  c.used=Math.max(uk,ut);c.bind=uk>=ut?'km':'time';
+  var pct=(it.alertPct!=null?it.alertPct:S.settings.yellowPct)/100;
+  c.st=c.used>=1?'bad':(c.used>=1-pct?'warn':'ok');
+  c.predDays=predDays;c.due=predDays==null?null:addD(today,Math.round(predDays));
+  return c;
+}
+
+/* ---------- views ---------- */
+var ICON={
+  home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  fuel:'<svg viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h13M14 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V8l-3-3M7 8h4"/></svg>',
+  wrench:'<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 12.6 12.6 21a2.1 2.1 0 0 1-3-3L18 9.6M14.7 6.3a4 4 0 0 1 5-3.5l-2.4 2.4.5 2.4 2.4.5L22 5.3a4 4 0 0 1-3.5 5"/></svg>',
+  log:'<svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
+  gear:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
+};
+var TABS=[['home','الرئيسية'],['fill','تفويلة'],['items','الصيانات'],['log','السجل'],['set','الإعدادات']];
+var TABICON={home:'home',fill:'fuel',items:'wrench',log:'log',set:'gear'};
+function nav(){
+  $('#nav').innerHTML=TABS.map(function(t){return '<button data-act="tab" data-v="'+t[0]+'"'+(ui.tab===t[0]?' aria-current="page"':'')+'>'+ICON[TABICON[t[0]]]+'<span>'+t[1]+'</span></button>'}).join('');
+}
+function odoHtml(n){
+  var s=fmt(n),h='';for(var i=0;i<s.length;i++){h+=s[i]===','?'<i></i>':'<b>'+s[i]+'</b>'}
+  return '<div class="odo" aria-label="'+s+' كم">'+h+'<span>كم</span></div>';
+}
+function chipsHtml(sel,act){
+  var all=[['','الكل']].concat(S.settings.cats.map(function(c){return [c,c]}));
+  return '<div class="chips">'+all.map(function(c){return '<button class="chip" data-act="'+act+'" data-v="'+esc(c[0])+'" aria-pressed="'+(sel===c[0])+'">'+esc(c[1])+'</button>'}).join('')+'</div>';
+}
+function remText(c){
+  var p=[];
+  if(c.it.kmInt)p.push(c.remKm>=0?fmt(c.remKm)+' كم':'تأخر '+fmt(-c.remKm)+' كم');
+  if(c.it.months)p.push(c.remDays>=0?fdays(c.remDays):'تأخر '+fdays(-c.remDays));
+  return {main:p[c.bind==='km'||!c.it.months?0:(c.it.kmInt?1:0)],other:p.length>1?p[c.bind==='km'?1:0]:''};
+}
+function itemRow(c){
+  var it=c.it,pill={ok:'سليم',warn:'قرّب',bad:'متأخر',none:'بدون تسجيل'}[c.st];
+  var h='<button class="item st-'+c.st+'" data-act="openItem" data-id="'+it.id+'"><div class="row"><div style="min-width:0"><div class="name">'+esc(it.name)+'</div><div class="cat">'+esc(it.cat||'بدون فئة')+'</div></div><span class="pill">'+pill+'</span></div>';
+  if(c.st==='none'){return h+'<div class="meta">اضغط وسجّل أول تغيير</div></button>'}
+  var r=remText(c);
+  h+='<div class="row"><div class="big">'+r.main+'</div>'+(r.other?'<div class="sub num">'+r.other+'</div>':'')+'</div>';
+  h+='<div class="bar"><i style="width:'+Math.max(2,Math.min(100,c.used*100))+'%"></i></div>';
+  var m=[];
+  if(c.due)m.push(c.used>=1?'تجاوز الموعد':'تقريباً '+fd(c.due));
+  m.push('آخر تغيير '+fmt(c.last.odo)+' كم');
+  m.push(c.last.cost!=null?'آخر تكلفة '+fmt(c.last.cost)+' ج.م':'التكلفة غير مسجّلة');
+  return h+'<div class="meta">'+m.map(function(x){return '<span class="num">'+x+'</span>'}).join('')+'</div></button>';
+}
+function sortCs(cs){return cs.slice().sort(function(a,b){return b.used-a.used})}
+
+function alertsHtml(D){
+  var a=[],names=function(l){return l.slice(0,3).map(function(c){return c.it.name}).join('، ')+(l.length>3?' و'+(l.length-3)+' كمان':'')};
+  var red=D.cs.filter(function(c){return c.st==='bad'}),yel=D.cs.filter(function(c){return c.st==='warn'});
+  if(red.length)a.push(['bad',red.length+' صيانة متأخرة: '+names(red)]);
+  if(yel.length)a.push(['warn',yel.length+' دخلت المنطقة الصفراء: '+names(yel)]);
+  if(D.fuel&&D.est>=D.fuel.refuel)a.push(['warn','وصلت لموعد التفويل المقترح ('+fmt(D.fuel.refuel)+' كم)']);
+  if(D.last){var n=dd(pd(D.last.date),D.today);if(n>=7)a.push(['info','آخر قراءة عداد من '+n+' يوم. سجّل قراءة جديدة.'])}
+  return a.length?'<div class="alerts">'+a.map(function(x){return '<div class="alert '+x[0]+'">'+esc(x[1])+'</div>'}).join('')+'</div>':'';
+}
+function viewHome(D){
+  var h='<div class="top"><div><h1>دفتر صيانة العربية</h1><small>هيونداي فيرنا 2014</small></div><div style="text-align:end">'+(S.demo?'<span class="demo">بيانات تجريبية</span><br>':'')+'<span class="sync" id="cloud">'+cloudText()+'</span></div></div>';
+  h+=alertsHtml(D);
+  if(cloud.st==='out')h+='<section class="card"><div class="sub">بياناتك دلوقتي على الموبايل بس. سجّل دخول بجوجل عشان تتحفظ على السحابة وتفتحها من أي جهاز.</div><button class="btn pri" data-act="signIn">تسجيل الدخول بجوجل</button></section>';
+  if(!D.last&&!S.items.length)h+='<section class="card"><h2>ابدأ في 3 خطوات</h2><div class="sub">1. اضبط سعر البنزين ومعدل البداية من الإعدادات. 2. سجّل قراءة العداد الحالية. 3. ضيف بنود الصيانة وقيمها.</div><div class="btns"><button class="btn" data-act="tab" data-v="set">الإعدادات</button><button class="btn pri" data-act="reading">قراءة العداد</button><button class="btn" data-act="itemForm" data-id="">+ بند</button></div></section>';
+  // odometer
+  h+='<section class="card"><div class="conf"><span class="lbl">آخر قراءة مؤكدة'+(D.last?' · '+fd(pd(D.last.date),true):'')+'</span>';
+  h+=D.last?odoHtml(D.last.odo):'<div class="empty">لسه مفيش قراءة. سجّل أول تفويلة أو قراءة عداد.</div>';
+  h+='</div>';
+  if(D.last){
+    var same=dd(pd(D.last.date),D.today)<=0;
+    h+='<div class="est num">'+(same?'<span>القراءة محدّثة النهاردة</span>':'<span>~ '+fmt(D.est)+' كم تقريباً الآن</span><small>تقدير بمعدل '+fmt(D.daily)+' كم/يوم'+(D.dailySrc==='guess'?' (افتراضي)':'')+'</small>')+'</div>';
+  }
+  h+='<div class="btns"><button class="btn pri" data-act="tab" data-v="fill">تسجيل تفويلة</button><button class="btn" data-act="reading">تسجيل قراءة عداد</button></div></section>';
+  // fuel
+  if(D.fuel){
+    var f=D.fuel,span=f.runsOut-f.fill.odo,p=function(x){return Math.max(0,Math.min(100,(x-f.fill.odo)/span*100))};
+    var remRef=f.refuel-D.est,remDays=D.daily>0?remRef/D.daily:null;
+    h+='<section class="card"><div class="row"><h2>البنزين</h2><span class="sub num">المعدل '+fmt1(D.rate)+' كم/لتر'+(D.rateSrc==='initial'?' (مبدئي)':' · آخر '+D.rateSrc+' فترات')+'</span></div>';
+    h+='<div class="fuelgrid"><div class="stat"><span class="k">فوّل عند</span><span class="v num">'+fmt(f.refuel)+' <small>كم</small></span></div><div class="stat"><span class="k">البنزين يخلص عند</span><span class="v num">'+fmt(f.runsOut)+' <small>كم</small></span></div></div>';
+    h+='<div class="range" aria-hidden="true"><div class="fillbar" style="width:'+p(D.est)+'%"></div><div class="mk" style="left:'+p(f.refuel)+'%"><em>تفويل</em></div><div class="now" style="left:'+p(D.est)+'%"></div></div>';
+    h+='<div class="sub num">'+(remRef>0?'فاضل تقريباً '+fmt(remRef)+' كم على موعد التفويل'+(remDays!=null?' (حوالي '+fdays(Math.round(remDays))+')':''):'عدّيت موعد التفويل المقترح بحوالي '+fmt(-remRef)+' كم')+'. محسوب على تانك '+fmt(f.tank)+' لتر مليان، والاحتياطي '+fmt(S.settings.reserve)+' لتر.</div></section>';
+  }
+  // upcoming
+  var cs=sortCs(D.cs).filter(function(c){return !ui.cat||c.it.cat===ui.cat});
+  var soon=cs.filter(function(c){return c.st==='bad'||c.st==='warn'||(c.predDays!=null&&c.predDays<=60)});
+  var rest=cs.length-soon.length;
+  h+='<section class="card"><div class="row"><h2>الصيانات القادمة</h2><span class="sub">خلال 60 يوم</span></div>'+chipsHtml(ui.cat,'cat');
+  h+='<div class="list">'+(soon.length?soon.map(itemRow).join(''):'<div class="empty">'+(S.items.length?'مفيش صيانات قريبة في الفئة دي.':'ضيف أول بند صيانة من تبويب الصيانات.')+'</div>')+'</div>';
+  if(rest>0)h+='<button class="btn" data-act="tab" data-v="items">باقي '+rest+' بند بعيد، شوف كل البنود</button>';
+  h+='</section>';
+  // last closed month
+  var now=D.today,ms=new Date(now.getFullYear(),now.getMonth()-1,1),me=new Date(now.getFullYear(),now.getMonth(),0),sK=ds(ms),eK=ds(me);
+  var mf=S.fills.filter(function(x){return x.date>=sK&&x.date<=eK}),cost=0,lit=0;
+  mf.forEach(function(x){cost+=x.liters*priceAt(x.date);lit+=x.liters});
+  var before=null,end=null;D.rd.forEach(function(r){if(r.date<sK)before=r;if(r.date<=eK)end=r});
+  var kmM=(before&&end&&end.odo>before.odo)?end.odo-before.odo:null;
+  var mname;try{mname=ms.toLocaleDateString('ar-EG-u-nu-latn',{month:'long',year:'numeric'})}catch(e){mname=sK.slice(0,7)}
+  h+='<section class="card"><div class="row"><h2>آخر شهر مقفول</h2><span class="sub">'+esc(mname)+'</span></div><div class="fuelgrid">';
+  h+='<div class="stat"><span class="k">تكلفة البنزين</span><span class="v num">'+(mf.length?fmt(cost):'—')+' <small>ج.م</small></span></div>';
+  h+='<div class="stat"><span class="k">المسافة</span><span class="v num">'+(kmM!=null?fmt(kmM):'—')+' <small>كم</small></span></div></div>';
+  h+='<div class="sub num">'+(mf.length?fmt1(lit)+' لتر في '+mf.length+' تفويلة.':'مفيش تفويلات مسجّلة في الشهر ده.')+(kmM==null?' المسافة محتاجة قراءة قبل الشهر وقراءة في آخره.':'')+'</div></section>';
+  return h;
+}
+
+function viewFill(D){
+  var h='<div class="top"><h1>تفويلة جديدة</h1></div>';
+  if(ui.flash){h+='<div class="ok-msg">'+ui.flash+'</div>'}
+  h+='<section class="card form"><div class="two"><div class="field"><label for="f-l">اللترات</label><input id="f-l" inputmode="decimal" placeholder="مثلاً 40" autocomplete="off"></div>';
+  h+='<div class="field"><label for="f-o">قراءة العداد (كم)</label><input id="f-o" inputmode="numeric" placeholder="'+(D.last?fmt(D.est):'')+'" autocomplete="off"></div></div>';
+  h+='<div class="field"><label for="f-d">التاريخ</label><input id="f-d" type="date" value="'+ds(D.today)+'"></div>';
+  h+='<div class="hint">السعر المستخدم '+fmt1(priceAt(ds(D.today)))+' ج.م للتر (من الإعدادات).</div><div class="err" id="f-e"></div>';
+  h+='<button class="btn pri" data-act="saveFill">حفظ التفويلة</button></section>';
+  h+='<section class="card"><h2>سجل التفويلات</h2><div class="table">';
+  var fs=S.fills.slice().sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.odo-a.odo});
+  var asc=S.fills.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:a.odo-b.odo});
+  h+=fs.length?fs.slice(0,40).map(function(f){
+    var i=asc.indexOf(f),pr=i>0?asc[i-1]:null,r=(pr&&f.odo>pr.odo&&f.liters>0)?fmt1((f.odo-pr.odo)/f.liters)+' كم/لتر':'—';
+    return '<div class="tr"><div class="l"><div class="t num">'+fmt1(f.liters)+' لتر · '+fmt(f.liters*priceAt(f.date))+' ج.م</div><div class="d num">'+fd(pd(f.date),true)+' · '+fmt(f.odo)+' كم · '+r+'</div></div><button class="x" data-act="delFill" data-id="'+f.id+'" aria-label="حذف">×</button></div>';
+  }).join(''):'<div class="empty">لسه مفيش تفويلات.</div>';
+  return h+'</div></section>';
+}
+
+function viewItems(D){
+  var cs=sortCs(D.cs).filter(function(c){return !ui.itemCat||c.it.cat===ui.itemCat});
+  var h='<div class="top"><h1>بنود الصيانة</h1><button class="btn pri sm" data-act="itemForm" data-id="">+ بند جديد</button></div>';
+  h+=chipsHtml(ui.itemCat,'icat');
+  h+='<div class="list">'+(cs.length?cs.map(itemRow).join(''):'<div class="empty">مفيش بنود هنا.</div>')+'</div>';
+  return h;
+}
+
+function viewLog(D){
+  var rows=[];S.items.forEach(function(it){it.history.forEach(function(x){rows.push({it:it,x:x})})});
+  rows.sort(function(a,b){return a.x.date<b.x.date?1:a.x.date>b.x.date?-1:b.x.odo-a.x.odo});
+  var yk=ds(addM(D.today,-12)),tot=0,cnt=0;rows.forEach(function(r){if(r.x.date>=yk&&r.x.cost){tot+=r.x.cost;cnt++}});
+  var h='<div class="top"><h1>سجل الصيانات</h1></div><section class="card"><div class="stat"><span class="k">مصروف الصيانة آخر 12 شهر</span><span class="v num">'+fmt(tot)+' <small>ج.م · '+cnt+' عملية</small></span></div><button class="btn" data-act="reportAll">حفظ جدول الصيانات PDF</button></section>';
+  h+='<section class="card"><div class="table">'+(rows.length?rows.map(function(r){
+    return '<div class="tr"><div class="l"><div class="t">'+esc(r.it.name)+'</div><div class="d num">'+fd(pd(r.x.date),true)+' · '+fmt(r.x.odo)+' كم'+(r.x.note?' · '+esc(r.x.note):'')+'</div></div><div class="t num">'+(r.x.cost!=null?fmt(r.x.cost)+' ج.م':'—')+'</div></div>';
+  }).join(''):'<div class="empty">السجل فاضي.</div>')+'</div></section>';
+  return h;
+}
+
+function viewSet(D){
+  var st=S.settings,pr=st.prices.slice().sort(function(a,b){return a.date<b.date?1:-1});
+  var h='<div class="top"><h1>الإعدادات</h1></div>';
+  h+='<section class="card form"><h2>سعر البنزين</h2><div class="two"><div class="field"><label for="s-p">السعر الجديد (ج.م/لتر)</label><input id="s-p" inputmode="decimal" placeholder="'+fmt1(pr[0]?pr[0].price:20)+'"></div><div class="field"><label for="s-pd">من تاريخ</label><input id="s-pd" type="date" value="'+ds(D.today)+'"></div></div><button class="btn" data-act="savePrice">إضافة السعر</button>';
+  h+='<div class="table">'+pr.map(function(p){return '<div class="tr"><span class="num">'+fd(pd(p.date),true)+'</span><span class="t num">'+fmt1(p.price)+' ج.م</span></div>'}).join('')+'</div></section>';
+  h+='<section class="card form"><h2>الحسابات</h2><div class="two"><div class="field"><label for="s-t">سعة التانك (لتر)</label><input id="s-t" inputmode="decimal" value="'+(st.tank||40)+'"></div><div class="field"><label for="s-r">احتياطي البنزين (لتر)</label><input id="s-r" inputmode="decimal" value="'+st.reserve+'"></div><div class="field"><label for="s-i">معدل البداية (كم/لتر)</label><input id="s-i" inputmode="decimal" value="'+st.initialRate+'"></div></div>';
+  h+='<div class="two"><div class="field"><label for="s-y">منطقة التنبيه (٪)</label><input id="s-y" inputmode="decimal" value="'+st.yellowPct+'"></div><div class="field"><label for="s-g">كم/يوم افتراضي</label><input id="s-g" inputmode="decimal" value="'+st.dailyGuess+'"></div></div><div class="err" id="s-e"></div><button class="btn pri" data-act="saveSet">حفظ</button></section>';
+  h+='<section class="card form"><h2>الفئات</h2><div class="chips" style="flex-wrap:wrap;overflow:visible">'+st.cats.map(function(c){return '<span class="chip">'+esc(c)+' <button class="x" style="padding:0 0 0 4px;font-size:16px" data-act="delCat" data-v="'+esc(c)+'" aria-label="حذف الفئة">×</button></span>'}).join('')+'</div>';
+  h+='<div class="two"><div class="field"><label for="s-c" class="sr">فئة جديدة</label><input id="s-c" placeholder="فئة جديدة"></div><button class="btn" data-act="addCat">إضافة فئة</button></div></section>';
+  h+='<section class="card"><h2>النسخ الاحتياطي</h2><div class="sub">البيانات بتتحفظ على الموبايل، وبتتزامن مع السحابة لما تسجّل دخول بحساب جوجل. الحالة: <b id="cloud2">'+cloudText()+'</b>.'+(cloud.user?' الحساب: <b>'+esc(cloud.user.email||'')+'</b>.':'')+' لو فتحته من جهاز تاني بنفس الحساب هتلاقي نفس البيانات، وآخر تعديل هو اللي بيفوز.</div><div class="btns">'+(cloud.user?'<button class="btn" data-act="syncNow">مزامنة دلوقتي</button><button class="btn" data-act="signOut">تسجيل خروج</button>':'<button class="btn pri" data-act="signIn">تسجيل الدخول بجوجل</button>')+'<button class="btn" data-act="exportJson">حفظ نسخة ملف</button><label class="btn" for="imp" style="text-align:center">استيراد نسخة</label><button class="btn" data-act="copyData">نسخ البيانات كنص</button><button class="btn" data-act="pasteData">لصق بيانات</button></div><input id="imp" type="file" accept=".json,application/json" hidden></section>';
+  h+='<section class="card"><h2>التنبيهات</h2><div class="sub">بتظهر أعلى الشاشة الرئيسية كل ما تفتح الدفتر: صيانة دخلت الأصفر أو اتأخرت، وقت التفويل، وتذكير لو القراءة قديمة 7 أيام.</div></section>';
+  h+='<section class="card"><h2>البيانات</h2><div class="sub">البيانات في النسخة التجريبية محفوظة على الموبايل ده فقط.</div><div class="btns"><button class="btn" data-act="resetDemo">حمّل بيانات تجريبية</button><button class="btn danger" data-act="clearAll">امسح كل شيء وابدأ ببياناتي</button></div></section>';
+  return h;
+}
+
+function render(){
+  var D=derive();ui.D=D;
+  var v={home:viewHome,fill:viewFill,items:viewItems,log:viewLog,set:viewSet}[ui.tab];
+  $('#app').innerHTML=v(D);nav();
+}
+
+/* ---------- sheets ---------- */
+function openSheet(html){$('#sheet').innerHTML='<div class="grab"></div>'+html;$('#shade').hidden=false}
+function closeSheet(){$('#shade').hidden=true;$('#sheet').innerHTML=''}
+var tt=null;
+function toast(m){var t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(function(){t.hidden=true},4000)}
+function field(id,label,val,extra){return '<div class="field"><label for="'+id+'">'+label+'</label><input id="'+id+'" '+(extra||'')+' value="'+esc(val==null?'':val)+'" autocomplete="off"></div>'}
+function getItem(id){return S.items.filter(function(i){return i.id===id})[0]}
+
+function sheetItem(id){
+  var D=ui.D,c=D.cs.filter(function(x){return x.it.id===id})[0],it=c.it;
+  var h='<div class="row"><h2>'+esc(it.name)+'</h2><span class="sub">'+esc(it.cat||'')+'</span></div>';
+  var iv=[];if(it.kmInt)iv.push('كل '+fmt(it.kmInt)+' كم');if(it.months)iv.push('كل '+it.months+' شهر');
+  h+='<div class="sub num">'+iv.join(' أو '),
+  h+=(it.alertPct!=null?' · تنبيه قبل '+it.alertPct+'٪':'')+'</div>';
+  if(c.st!=='none'){h+='<div class="item st-'+c.st+'" style="border:0;padding:0"><div class="bar"><i style="width:'+Math.max(2,Math.min(100,c.used*100))+'%"></i></div></div>';
+    var r=remText(c);h+='<div class="row"><div class="big num" style="font-size:20px;font-weight:700">'+r.main+'</div><div class="sub num">'+(c.due?(c.used>=1?'تجاوز الموعد':'تقريباً '+fd(c.due)):'')+'</div></div>'}
+  h+='<div class="btns"><button class="btn pri" data-act="done" data-id="'+id+'">تم التغيير</button><button class="btn" data-act="itemForm" data-id="'+id+'">تعديل</button></div>';
+  h+='<h3 style="font-size:16px">سجل التغييرات</h3><div class="table">';
+  var hs=it.history.slice().sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.odo-a.odo});
+  h+=hs.length?hs.map(function(x){return '<div class="tr"><div class="l"><div class="t num">'+fd(pd(x.date),true)+' · '+fmt(x.odo)+' كم</div><div class="d num">'+(x.cost!=null?fmt(x.cost)+' ج.م':'التكلفة غير مسجّلة')+(x.note?' · '+esc(x.note):'')+'</div></div><button class="x" data-act="delHist" data-id="'+id+'" data-h="'+x.id+'" aria-label="حذف">×</button></div>'}).join(''):'<div class="empty">لسه مفيش تغييرات مسجّلة.</div>';
+  h+='</div><div class="btns"><button class="btn danger" data-act="delItem" data-id="'+id+'" id="del-btn">حذف البند</button><button class="btn" data-act="reportItem" data-id="'+id+'">تقرير PDF</button><button class="btn" data-act="close">إغلاق</button></div>';
+  openSheet(h);
+}
+function sheetDone(id){
+  var it=getItem(id),D=ui.D;
+  openSheet('<h2>تم تغيير: '+esc(it.name)+'</h2><div class="form"><div class="two">'+field('d-d','التاريخ',ds(D.today),'type="date"')+field('d-o','الكيلومتراج',D.last?Math.round(D.est):'','inputmode="numeric"')+'</div>'+field('d-c','التكلفة (اختياري)','','inputmode="decimal"')+field('d-n','ملاحظة (اختياري)','','')+'<div class="hint">الكيلومتراج المقترح هو التقديري الحالي. عدّله لو مختلف. التغيير بيصفّر عدّاد البند.</div><div class="err" id="d-e"></div><div class="btns"><button class="btn pri" data-act="saveDone" data-id="'+id+'">حفظ</button><button class="btn" data-act="close">إلغاء</button></div></div>');
+}
+function sheetItemForm(id){
+  var it=id?getItem(id):null,D=ui.D;
+  var h='<h2>'+(it?'تعديل البند':'بند صيانة جديد')+'</h2><div class="form">';
+  if(!it)h+='<div class="hint">اختار من المقترحات أو اكتب اسم من عندك:</div><div class="chips">'+SUGG.map(function(s){return '<button class="chip" data-act="sugg" data-n="'+esc(s[0])+'" data-c="'+esc(s[1])+'">'+esc(s[0])+'</button>'}).join('')+'</div>';
+  h+=field('i-n','اسم البند',it?it.name:'','');
+  h+='<div class="field"><label for="i-c">الفئة</label><select id="i-c">'+S.settings.cats.map(function(c){return '<option'+(it&&it.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></div>';
+  h+='<div class="two">'+field('i-k','كل كام كم',it&&it.kmInt?it.kmInt:'','inputmode="numeric" placeholder="مثلاً 5000"')+field('i-m','كل كام شهر',it&&it.months?it.months:'','inputmode="numeric" placeholder="مثلاً 6"')+'</div>';
+  h+=field('i-a','التنبيه قبل الموعد بنسبة ٪ (اختياري)',it&&it.alertPct!=null?it.alertPct:'','inputmode="decimal" placeholder="الافتراضي '+S.settings.yellowPct+'"');
+  if(!it){h+='<h3 style="font-size:15px">آخر مرة اتغير (اختياري)</h3><div class="two">'+field('i-ld','التاريخ',ds(D.today),'type="date"')+field('i-lo','الكيلومتراج',D.last?Math.round(D.est):'','inputmode="numeric"')+'</div>'+field('i-lc','التكلفة','','inputmode="decimal"')}
+  h+='<div class="hint">لازم تحدد كيلومتراج أو شهور أو الاتنين. البند بيستحق بأيهما أقرب.</div><div class="err" id="i-e"></div><div class="btns"><button class="btn pri" data-act="saveItem" data-id="'+(id||'')+'">حفظ</button><button class="btn" data-act="close">إلغاء</button></div></div>';
+  openSheet(h);
+}
+function sheetReading(){
+  var D=ui.D;
+  openSheet('<h2>قراءة عداد</h2><div class="form"><div class="two">'+field('r-d','التاريخ',ds(D.today),'type="date"')+field('r-o','الكيلومتراج','','inputmode="numeric" placeholder="'+(D.last?fmt(D.est):'')+'"')+'</div><div class="err" id="r-e"></div><div class="btns"><button class="btn pri" data-act="saveReading">حفظ</button><button class="btn" data-act="close">إلغاء</button></div></div>');
+}
+function setErr(id,m){var e=$('#'+id);if(e)e.textContent=m;return false}
+var val=function(id){var e=$('#'+id);return e?e.value:''};
+
+var SUGG=[['زيت المحرك','سوائل'],['فلتر الزيت','فلاتر وسيور'],['فلتر الهواء','فلاتر وسيور'],['فلتر البنزين','فلاتر وسيور'],['فلتر التكييف','فلاتر وسيور'],['بوجيهات','مكنة'],['تيل الفرامل','عفشة'],['زيت الفرامل','سوائل'],['زيت ناقل الحركة','سوائل'],['مياه الردياتير','سوائل'],['سير الكاميرا','فلاتر وسيور'],['سير الدينامو','فلاتر وسيور'],['مساعدين','عفشة'],['ترصيص وميزان','كاوتش'],['البطارية','كهربا وبطارية'],['تأمين','تراخيص'],['رخصة','تراخيص']];
+
+/* ---------- PDF (drawn on canvas so Arabic shapes correctly, wrapped as image pages) ---------- */
+var FONT='"IBM Plex Sans Arabic",Tahoma,Arial,sans-serif';
+function makeReport(title,sub,cols,rows,foot){
+  var W=1240,H=1754,M=64,RH=78,pages=[],cx,y,cw=cols.map(function(c){return c.w*(W-2*M)});
+  function np(){var cv=document.createElement('canvas');cv.width=W;cv.height=H;cx=cv.getContext('2d');cx.fillStyle='#ffffff';cx.fillRect(0,0,W,H);cx.direction='rtl';cx.textBaseline='middle';cx.textAlign='right';pages.push(cv);y=M}
+  function fit(t,w){t=String(t);if(cx.measureText(t).width<=w)return t;while(t.length>1&&cx.measureText(t+'…').width>w)t=t.slice(0,-1);return t+'…'}
+  function head(){var x=W-M;cx.fillStyle='#0e6b66';cx.fillRect(M,y,W-2*M,56);cx.fillStyle='#ffffff';cx.font='600 24px '+FONT;
+    cols.forEach(function(c,i){cx.fillText(fit(c.h,cw[i]-20),x-12,y+28);x-=cw[i]});y+=56}
+  np();
+  cx.fillStyle='#14201f';cx.font='700 44px '+FONT;cx.fillText(title,W-M,y+30);y+=62;
+  cx.fillStyle='#576866';cx.font='400 24px '+FONT;cx.fillText(sub,W-M,y+12);y+=50;
+  head();
+  rows.forEach(function(r,ri){
+    if(y+RH>H-M-40){np();head()}
+    if(ri%2===0){cx.fillStyle='#eef1f0';cx.fillRect(M,y,W-2*M,RH)}
+    var x=W-M;
+    r.forEach(function(cell,i){
+      var c=(cell&&typeof cell==='object')?cell:{t:cell},ls=String(c.t).split('\n');
+      cx.fillStyle=c.c||'#14201f';cx.font=(c.b?'700 ':'500 ')+(i===0?'25px ':'23px ')+FONT;
+      var top=y+RH/2-(ls.length-1)*16;
+      ls.forEach(function(l,li){cx.fillText(fit(l,cw[i]-20),x-12,top+li*32)});x-=cw[i]});
+    cx.strokeStyle='#d2dad8';cx.lineWidth=1;cx.beginPath();cx.moveTo(M,y+RH);cx.lineTo(W-M,y+RH);cx.stroke();y+=RH});
+  if(!rows.length){cx.fillStyle='#576866';cx.font='500 24px '+FONT;cx.fillText('مفيش بيانات مسجّلة.',W-M-12,y+40);y+=80}
+  if(foot){if(y+70>H-M-40)np();cx.fillStyle='#14201f';cx.font='700 28px '+FONT;cx.fillText(foot,W-M-12,y+40)}
+  pages.forEach(function(cv,i){var g=cv.getContext('2d');g.direction='rtl';g.textBaseline='middle';g.fillStyle='#576866';g.font='400 20px '+FONT;
+    g.textAlign='left';g.fillText('صفحة '+(i+1)+' من '+pages.length,M,H-M+10);g.textAlign='right';g.fillText('دفتر صيانة العربية · '+fd(T0(),true),W-M,H-M+10)});
+  return pages;
+}
+function jpegBytes(cv){var b=atob(cv.toDataURL('image/jpeg',0.88).split(',')[1]),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function pdfBlob(pages){
+  var enc=new TextEncoder(),parts=[],offs=[],len=0,N=pages.length,max=2+N*3;
+  function push(x){var b=typeof x==='string'?enc.encode(x):x;parts.push(b);len+=b.length}
+  function obj(n,body){offs[n]=len;push(n+' 0 obj\n'+body+'\nendobj\n')}
+  push('%PDF-1.4\n');
+  var kids=[];for(var i=0;i<N;i++)kids.push((3+i*3)+' 0 R');
+  obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2,'<< /Type /Pages /Kids ['+kids.join(' ')+'] /Count '+N+' >>');
+  pages.forEach(function(cv,i){
+    var pg=3+i*3,ct=pg+1,im=pg+2,cs='q 595 0 0 842 0 0 cm /Im0 Do Q',jb=jpegBytes(cv);
+    obj(pg,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 '+im+' 0 R >> >> /Contents '+ct+' 0 R >>');
+    obj(ct,'<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream');
+    offs[im]=len;push(im+' 0 obj\n<< /Type /XObject /Subtype /Image /Width '+cv.width+' /Height '+cv.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jb.length+' >>\nstream\n');push(jb);push('\nendstream\nendobj\n');
+  });
+  var x=len;push('xref\n0 '+(max+1)+'\n0000000000 65535 f \n');
+  for(var n=1;n<=max;n++)push(String(offs[n]).padStart(10,'0')+' 00000 n \n');
+  push('trailer\n<< /Size '+(max+1)+' /Root 1 0 R >>\nstartxref\n'+x+'\n%%EOF');
+  return new Blob(parts,{type:'application/pdf'});
+}
+function ensureFont(){
+  if(!(document.fonts&&document.fonts.load))return Promise.resolve();
+  return Promise.all(['500','600','700'].map(function(w){return document.fonts.load(w+' 24px "IBM Plex Sans Arabic"')})).catch(function(){});
+}
+function saveFile(name,data){
+  try{
+    var blob=(data instanceof Blob)?data:new Blob([data],{type:'application/json'});
+    var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);a.remove()},2000);toast('اتحفظ الملف');
+  }catch(e){toast('تعذّر حفظ الملف')}
+  return Promise.resolve();
+}
+function reportAll(){
+  return ensureFont().then(function(){
+    var D=ui.D=derive();
+    var rows=sortCs(D.cs).map(function(c){
+      var it=c.it,iv=[];if(it.kmInt)iv.push(fmt(it.kmInt)+' كم');if(it.months)iv.push(it.months+' شهر');
+      var colr={ok:'#1b7f45',warn:'#9c5d00',bad:'#b8341f',none:'#576866'}[c.st];
+      var nx=c.st==='none'?'—':(c.due?(c.used>=1?'متأخر':fd(c.due)):'—');
+      return [{t:it.name,b:true},it.cat||'—',iv.join('\nأو '),c.last?fd(pd(c.last.date),true)+'\n'+fmt(c.last.odo)+' كم':'—',c.last&&c.last.cost!=null?fmt(c.last.cost)+' ج.م':'—',{t:nx,c:colr,b:true}];
+    });
+    var pages=makeReport('جدول الصيانات','هيونداي فيرنا 2014 · القراءة المؤكدة '+(D.last?fmt(D.last.odo)+' كم':'—')+' · '+fd(D.today,true),
+      [{h:'البند',w:.22},{h:'الفئة',w:.16},{h:'الدورة',w:.14},{h:'آخر تغيير',w:.19},{h:'آخر تكلفة',w:.11},{h:'الموعد القادم',w:.18}],rows);
+    return saveFile('maintenance-table-'+ds(D.today)+'.pdf',pdfBlob(pages));
+  });
+}
+function reportItem(id){
+  return ensureFont().then(function(){
+    var it=getItem(id),iv=[],tot=0;if(it.kmInt)iv.push('كل '+fmt(it.kmInt)+' كم');if(it.months)iv.push('كل '+it.months+' شهر');
+    var hs=it.history.slice().sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.odo-a.odo});
+    hs.forEach(function(x){if(x.cost)tot+=x.cost});
+    var rows=hs.map(function(x){return [fd(pd(x.date),true),fmt(x.odo)+' كم',x.cost!=null?fmt(x.cost)+' ج.م':'—',x.note||'']});
+    var pages=makeReport('سجل '+it.name,(it.cat||'')+' · '+iv.join(' أو '),[{h:'التاريخ',w:.3},{h:'الكيلومتراج',w:.25},{h:'التكلفة',w:.2},{h:'ملاحظة',w:.25}],rows,'إجمالي التكلفة: '+fmt(tot)+' ج.م');
+    return saveFile('item-log-'+ds(T0())+'.pdf',pdfBlob(pages));
+  });
+}
+
+/* ---------- actions ---------- */
+var pendingDel=null;
+var A={
+  tab:function(d){ui.tab=d.v;ui.flash=null;render();window.scrollTo(0,0)},
+  cat:function(d){ui.cat=d.v;render()},
+  icat:function(d){ui.itemCat=d.v;render()},
+  close:closeSheet,
+  openItem:function(d){sheetItem(d.id)},
+  done:function(d){sheetDone(d.id)},
+  itemForm:function(d){sheetItemForm(d.id)},
+  reading:sheetReading,
+  saveReading:function(){
+    var o=num(val('r-o')),dt=val('r-d'),L=ui.D.last;
+    if(!(o>0))return setErr('r-e','اكتب قراءة العداد بالأرقام.');
+    if(!dt)return setErr('r-e','اختار التاريخ.');
+    if(L&&o<L.odo)return setErr('r-e','القراءة أقل من آخر قراءة مؤكدة ('+fmt(L.odo)+'). راجع الرقم.');
+    S.readings.push({id:uid(),date:dt,odo:o});save();closeSheet();render();toast('اتسجّلت القراءة')
+  },
+  saveFill:function(){
+    var l=num(val('f-l')),o=num(val('f-o')),dt=val('f-d'),L=ui.D.last;
+    if(!(l>0))return setErr('f-e','اكتب عدد اللترات.');
+    if(!(o>0))return setErr('f-e','اكتب قراءة العداد.');
+    if(!dt)return setErr('f-e','اختار التاريخ.');
+    if(L&&o<L.odo)return setErr('f-e','القراءة أقل من آخر قراءة مؤكدة ('+fmt(L.odo)+'). راجع الرقم.');
+    var prev=S.fills.slice().sort(function(a,b){return a.odo-b.odo}).filter(function(x){return x.odo<o}).pop();
+    S.fills.push({id:uid(),date:dt,liters:l,odo:o});save();
+    var D=derive(),f=D.fuel,msg='اتسجّلت التفويلة. ';
+    if(prev)msg+='المعدل في الفترة دي '+fmt1((o-prev.odo)/l)+' كم/لتر. ';
+    msg+='البنزين يخلص عند '+fmt(f.runsOut)+' كم، وفوّل عند '+fmt(f.refuel)+' كم (متوسط '+fmt1(D.rate)+' كم/لتر).';
+    ui.flash=msg;render();window.scrollTo(0,0)
+  },
+  delFill:function(d){if(pendingDel!==d.id){pendingDel=d.id;toast('اضغط × تاني للتأكيد على الحذف');return}S.fills=S.fills.filter(function(f){return f.id!==d.id});pendingDel=null;save();render()},
+  saveItem:function(d){
+    var n=val('i-n').trim(),k=num(val('i-k')),m=num(val('i-m')),a=num(val('i-a'));
+    if(!n)return setErr('i-e','اكتب اسم البند.');
+    if(!(k>0)&&!(m>0))return setErr('i-e','حدّد كيلومتراج أو شهور على الأقل.');
+    var it=d.id?getItem(d.id):null;
+    if(!it){it={id:uid(),history:[]};S.items.push(it);
+      var lo=num(val('i-lo')),ld=val('i-ld'),lc=num(val('i-lc'));
+      if(lo>0&&ld)it.history.push({id:uid(),date:ld,odo:lo,cost:lc>0?lc:null,note:''});}
+    it.name=n;it.cat=val('i-c');it.kmInt=k>0?k:null;it.months=m>0?m:null;it.alertPct=(a>=0&&a!=null&&isFinite(a))?a:null;
+    save();closeSheet();render();toast('اتحفظ البند')
+  },
+  saveDone:function(d){
+    var it=getItem(d.id),o=num(val('d-o')),dt=val('d-d'),c=num(val('d-c'));
+    if(!(o>0))return setErr('d-e','اكتب الكيلومتراج.');
+    if(!dt)return setErr('d-e','اختار التاريخ.');
+    it.history.push({id:uid(),date:dt,odo:o,cost:c>0?c:null,note:val('d-n').trim()});
+    var L=ui.D.last;if(!L||o>L.odo)S.readings.push({id:uid(),date:dt,odo:o});
+    save();closeSheet();render();toast('اتسجّل التغيير وبدأ العدّ من جديد')
+  },
+  delHist:function(d){if(pendingDel!==d.h){pendingDel=d.h;toast('اضغط × تاني للتأكيد');return}var it=getItem(d.id);it.history=it.history.filter(function(x){return x.id!==d.h});pendingDel=null;save();render();sheetItem(d.id)},
+  delItem:function(d){var b=$('#del-btn');if(pendingDel!==d.id){pendingDel=d.id;b.textContent='اضغط تاني لتأكيد الحذف';return}S.items=S.items.filter(function(i){return i.id!==d.id});pendingDel=null;save();closeSheet();render()},
+  savePrice:function(){var p=num(val('s-p')),dt=val('s-pd');if(!(p>0)||!dt){toast('اكتب السعر والتاريخ');return}S.settings.prices.push({date:dt,price:p});save();render();toast('اتضاف السعر')},
+  saveSet:function(){
+    var t=num(val('s-t')),r=num(val('s-r')),i=num(val('s-i')),y=num(val('s-y')),g=num(val('s-g'));
+    if(!(t>0)||!(r<t)||!(r>=0)||!(i>0)||!(y>=0)||!(g>0))return setErr('s-e','راجع الأرقام، كلها لازم تكون موجبة.');
+    var s=S.settings;s.tank=t;s.reserve=r;s.initialRate=i;s.yellowPct=y;s.dailyGuess=g;save();render();toast('اتحفظت الإعدادات')
+  },
+  addCat:function(){var c=val('s-c').trim();if(!c)return;if(S.settings.cats.indexOf(c)<0)S.settings.cats.push(c);save();render()},
+  delCat:function(d){S.settings.cats=S.settings.cats.filter(function(c){return c!==d.v});save();render()},
+  resetDemo:function(){if(pendingDel!=='demo'){pendingDel='demo';toast('ده هيستبدل بياناتك. اضغط تاني للتأكيد');return}S=demo();pendingDel=null;save();ui.cat='';ui.itemCat='';render();toast('اتحمّلت بيانات تجريبية')},
+  reportAll:function(){reportAll()},
+  reportItem:function(d){reportItem(d.id)},
+  sugg:function(d){var n=$('#i-n'),c=$('#i-c');if(n)n.value=d.n;if(c&&S.settings.cats.indexOf(d.c)>=0)c.value=d.c},
+  syncNow:function(){if(!cloud.ref){toast('سجّل دخول بجوجل الأول');return}S.updatedAt=Date.now();localSave();cloudPush();toast('بنحفظ على السحابة')},
+  signIn:function(){
+    if(!cloud.api){toast('خدمة الدخول لسه بتتحمّل. اتأكد من النت وجرّب بعد ثواني');return}
+    var pr=new cloud.api.au.GoogleAuthProvider();
+    cloud.api.au.signInWithPopup(cloud.auth,pr).catch(function(e){toast('تعذّر تسجيل الدخول'+(e&&e.code?' ('+e.code+')':''))});
+  },
+  signOut:function(){if(cloud.api)cloud.api.au.signOut(cloud.auth).then(function(){toast('اتسجّل الخروج')})},
+  exportJson:function(){saveFile('car-book-backup-'+ds(T0())+'.json',JSON.stringify(S))},
+  copyData:function(){
+    var txt=JSON.stringify(S);
+    var show=function(){openSheet('<h2>نسخ البيانات</h2><div class="form"><div class="hint">اضغط مطوّلاً جوه الخانة، اختار تحديد الكل، وبعدها نسخ.</div><textarea id="p-t" rows="8" readonly style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;direction:ltr"></textarea><button class="btn" data-act="close">إغلاق</button></div>');var t=$('#p-t');t.value=txt;t.focus();t.select()};
+    try{navigator.clipboard.writeText(txt).then(function(){toast('اتنسخت البيانات. الصقها في الدفتر التاني')},show)}catch(e){show()}
+  },
+  pasteData:function(){openSheet('<h2>لصق بيانات</h2><div class="form"><div class="hint">الصق هنا النص اللي نسخته من الدفتر القديم. ده بيستبدل البيانات الحالية.</div><textarea id="p-t" rows="8" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;direction:ltr"></textarea><div class="err" id="p-e"></div><div class="btns"><button class="btn pri" data-act="doPaste">استيراد</button><button class="btn" data-act="close">إلغاء</button></div></div>')},
+  doPaste:function(){
+    var o=null;try{o=JSON.parse(val('p-t').trim())}catch(e){}
+    if(!o||!Array.isArray(o.items)||!Array.isArray(o.fills)||!o.settings)return setErr('p-e','النص ده مش نسخة صحيحة من الدفتر. انسخه كامل من أوله لآخره.');
+    if((S.items.length||S.fills.length)&&pendingDel!=='paste'){pendingDel='paste';return setErr('p-e','البيانات الحالية هتتستبدل. اضغط استيراد تاني للتأكيد.')}
+    o.readings=o.readings||[];S=o;pendingDel=null;save();closeSheet();render();toast('اتستوردت '+o.items.length+' بند و'+o.fills.length+' تفويلة')
+  },
+  clearAll:function(){if(pendingDel!=='clear'){pendingDel='clear';toast('اضغط تاني لمسح كل البيانات');return}S=blank();pendingDel=null;save();render()}
+};
+document.addEventListener('click',function(e){
+  if(e.target.id==='shade'){closeSheet();return}
+  var t=e.target.closest('[data-act]');if(!t)return;
+  var a=t.dataset.act;if(a!=='delFill'&&a!=='delHist'&&a!=='delItem'&&a!=='clearAll'&&a!=='resetDemo'&&a!=='doPaste')pendingDel=null;
+  if(A[a])A[a](t.dataset);
+});
+document.addEventListener('change',function(e){
+  if(e.target.id!=='imp')return;var f=e.target.files[0];if(!f)return;var r=new FileReader();
+  r.onload=function(){try{var o=JSON.parse(r.result);if(!o||!Array.isArray(o.items)||!Array.isArray(o.fills)||!o.settings)throw 0;o.readings=o.readings||[];S=o;save();render();toast('اتستورد الملف')}catch(x){toast('الملف مش نسخة صحيحة')}};
+  r.readAsText(f);
+});
+render();cloudInit();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
+})();
+</script>
+</body>
+</html>
